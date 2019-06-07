@@ -23,14 +23,18 @@ import com.hellobike.base.tunnel.config.file.FileConfigLoader;
  */
 public class ConfigLoaderFactory {
 
-    private ConfigLoaderFactory() {
-    }
+	private ConfigLoaderFactory() {
+	}
 
-    public static ConfigLoader getConfigLoader(TunnelConfig tunnelConfig) {
-        if (tunnelConfig.isUseApollo()) {
-            return new ApolloConfigLoader(tunnelConfig.getAppId(), tunnelConfig.getMetaDomain());
-        }
-        return new FileConfigLoader(tunnelConfig.getConfigFile());
-    }
+	public static ConfigLoader getConfigLoader(TunnelConfig tunnelConfig) {
+		if (tunnelConfig.isUseApollo()) {
+			return new ApolloConfigLoader(tunnelConfig.getAppId(), tunnelConfig.getMetaDomain());
+		}
+		/**
+		 * tunnel_subscribe_config={"pg_dump_path":"","subscribes":[{"slotName":"slot_for_test","pgConnConf":{"host":"localhost","port":5432,"database":"test1","user":"test1","password":"test1"},"rules":[{"table":"t_department_info","fields":null,"pks":["id"],"esid":["id"],"index":"t_department_info","type":"logs"}],"esConf":{"addrs":"http://localhost:9200"}}]}
+		 * tunnel_zookeeper_address=localhost:2181
+		 */
+		return new FileConfigLoader(tunnelConfig.getConfigFile());
+	}
 
 }
