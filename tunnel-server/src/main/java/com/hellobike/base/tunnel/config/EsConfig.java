@@ -2,6 +2,8 @@ package com.hellobike.base.tunnel.config;
 
 import com.hellobike.base.tunnel.filter.IEventFilter;
 
+import lombok.ToString;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,127 +27,128 @@ import java.util.Map;
 /**
  * @author machunxiao 2018-11-01
  */
+@ToString
 public class EsConfig {
 
-    private String server;
-    private String schema;
-    private String table;
+	private String server;
+	private String schema;
+	private String table;
 
-    private String index;
-    private String type;
-    private Map<String, String> fieldMappings;
-    private List<String> pkFieldNames;
-    private List<String> esIdFieldNames;
+	private String index;
+	private String type;
+	private Map<String, String> fieldMappings;
+	private List<String> pkFieldNames;
+	private List<String> esIdFieldNames;
 
-    private String separator = ";";
+	private String separator = ";";
 
-    private String dstTable;
-    private String sql;
-    private List<String> parameters;
+	private String dstTable;
+	private String sql;
+	private List<String> parameters;
 
-    private List<IEventFilter> filters = new ArrayList<>();
+	private List<IEventFilter> filters = new ArrayList<>();
 
-    public String getServer() {
-        return server;
-    }
+	public String getServer() {
+		return server;
+	}
 
-    public void setServer(String server) {
-        this.server = server;
-    }
+	public void setServer(String server) {
+		this.server = server;
+	}
 
-    public String getSchema() {
-        return schema;
-    }
+	public String getSchema() {
+		return schema;
+	}
 
-    public void setSchema(String schema) {
-        this.schema = schema;
-    }
+	public void setSchema(String schema) {
+		this.schema = schema;
+	}
 
-    public String getTable() {
-        return table;
-    }
+	public String getTable() {
+		return table;
+	}
 
-    public void setTable(String table) {
-        this.table = table;
-    }
+	public void setTable(String table) {
+		this.table = table;
+	}
 
-    public String getIndex() {
-        return index;
-    }
+	public String getIndex() {
+		return index;
+	}
 
-    public void setIndex(String index) {
-        this.index = index;
-    }
+	public void setIndex(String index) {
+		this.index = index;
+	}
 
-    public String getType() {
-        return type;
-    }
+	public String getType() {
+		return type;
+	}
 
-    public void setType(String type) {
-        this.type = type;
-    }
+	public void setType(String type) {
+		this.type = type;
+	}
 
-    public Map<String, String> getFieldMappings() {
-        return fieldMappings;
-    }
+	public Map<String, String> getFieldMappings() {
+		return fieldMappings;
+	}
 
-    public void setFieldMappings(Map<String, String> fieldMappings) {
-        this.fieldMappings = fieldMappings;
-    }
+	public void setFieldMappings(Map<String, String> fieldMappings) {
+		this.fieldMappings = fieldMappings;
+	}
 
-    public List<String> getPkFieldNames() {
-        return pkFieldNames;
-    }
+	public List<String> getPkFieldNames() {
+		return pkFieldNames;
+	}
 
-    public void setPkFieldNames(List<String> pkFieldNames) {
-        this.pkFieldNames = pkFieldNames;
-    }
+	public void setPkFieldNames(List<String> pkFieldNames) {
+		this.pkFieldNames = pkFieldNames;
+	}
 
-    public List<String> getEsIdFieldNames() {
-        return esIdFieldNames;
-    }
+	public List<String> getEsIdFieldNames() {
+		return esIdFieldNames;
+	}
 
-    public void setEsIdFieldNames(List<String> esIdFieldNames) {
-        this.esIdFieldNames = esIdFieldNames;
-    }
+	public void setEsIdFieldNames(List<String> esIdFieldNames) {
+		this.esIdFieldNames = esIdFieldNames;
+	}
 
-    public String getSeparator() {
-        return separator;
-    }
+	public String getSeparator() {
+		return separator;
+	}
 
-    public void setSeparator(String separator) {
-        this.separator = separator;
-    }
+	public void setSeparator(String separator) {
+		this.separator = separator;
+	}
 
-    public List<IEventFilter> getFilters() {
-        return filters;
-    }
+	public List<IEventFilter> getFilters() {
+		return filters;
+	}
 
-    public void setFilters(List<IEventFilter> filters) {
-        this.filters = filters;
-    }
+	public void setFilters(List<IEventFilter> filters) {
+		this.filters = filters;
+	}
 
-    public String getDstTable() {
-        return dstTable;
-    }
+	public String getDstTable() {
+		return dstTable;
+	}
 
-    public void setDstTable(String dstTable) {
-        this.dstTable = dstTable;
-    }
+	public void setDstTable(String dstTable) {
+		this.dstTable = dstTable;
+	}
 
-    public String getSql() {
-        return sql;
-    }
+	public String getSql() {
+		return sql;
+	}
 
-    public void setSql(String sql) {
-        this.sql = sql;
-    }
+	public void setSql(String sql) {
+		this.sql = sql;
+	}
 
-    public List<String> getParameters() {
-        return parameters;
-    }
+	public List<String> getParameters() {
+		return parameters;
+	}
 
-    public void setParameters(List<String> parameters) {
-        this.parameters = parameters;
-    }
+	public void setParameters(List<String> parameters) {
+		this.parameters = parameters;
+	}
 }

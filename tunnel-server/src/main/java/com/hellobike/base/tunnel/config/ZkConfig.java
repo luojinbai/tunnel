@@ -16,19 +16,22 @@
 
 package com.hellobike.base.tunnel.config;
 
+import lombok.ToString;
+
 /**
  * @author machunxiao 2018-11-07
  */
+@ToString
 public class ZkConfig {
 
-    private String address = "localhost:2181";
+	private String address = "localhost:2181";
 
-    public String getAddress() {
-        return address;
-    }
+	public String getAddress() {
+		return address;
+	}
 
-    public void setAddress(String address) {
-        this.address = address;
-    }
+	public void setAddress(String address) {
+		this.address = address;
+	}
 
 }

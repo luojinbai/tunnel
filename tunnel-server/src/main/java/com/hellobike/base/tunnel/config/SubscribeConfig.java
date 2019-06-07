@@ -16,38 +16,40 @@
 
 package com.hellobike.base.tunnel.config;
 
+import lombok.ToString;
+
 /**
  * @author machunxiao 2018-10-26
  */
+@ToString
 public class SubscribeConfig {
 
-    private String serverId;
-    private JdbcConfig jdbcConfig;
-    private ZkConfig zkConfig;
+	private String serverId;
+	private JdbcConfig jdbcConfig;
+	private ZkConfig zkConfig;
 
-    public String getServerId() {
-        return serverId;
-    }
+	public String getServerId() {
+		return serverId;
+	}
 
-    public void setServerId(String serverId) {
-        this.serverId = serverId;
-    }
+	public void setServerId(String serverId) {
+		this.serverId = serverId;
+	}
 
-    public JdbcConfig getJdbcConfig() {
-        return jdbcConfig;
-    }
+	public JdbcConfig getJdbcConfig() {
+		return jdbcConfig;
+	}
 
-    public void setJdbcConfig(JdbcConfig jdbcConfig) {
-        this.jdbcConfig = jdbcConfig;
-    }
+	public void setJdbcConfig(JdbcConfig jdbcConfig) {
+		this.jdbcConfig = jdbcConfig;
+	}
 
-    public ZkConfig getZkConfig() {
-        return zkConfig;
-    }
+	public ZkConfig getZkConfig() {
+		return zkConfig;
+	}
 
-    public void setZkConfig(ZkConfig zkConfig) {
-        this.zkConfig = zkConfig;
-    }
+	public void setZkConfig(ZkConfig zkConfig) {
+		this.zkConfig = zkConfig;
+	}
 
 }
-
