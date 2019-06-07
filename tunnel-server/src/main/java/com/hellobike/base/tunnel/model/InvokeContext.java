@@ -2,6 +2,8 @@ package com.hellobike.base.tunnel.model;
 
 import com.hellobike.base.tunnel.publisher.IPublisher;
 
+import lombok.ToString;
+
 /*
  * Copyright 2018 Shanghai Junzheng Network Technology Co.,Ltd.
  *
@@ -21,6 +23,7 @@ import com.hellobike.base.tunnel.publisher.IPublisher;
 /**
  * @author machunxiao create at 2018-12-14
  */
+@ToString
 public class InvokeContext {
 
     private String serverId;

@@ -16,9 +16,38 @@
 
 package com.hellobike.base.tunnel;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.StringUtils;
+import org.apache.log4j.LogManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.alibaba.fastjson.JSON;
 import com.hellobike.base.tunnel.apollo.ApolloConfig;
-import com.hellobike.base.tunnel.config.*;
+import com.hellobike.base.tunnel.apollo.ApolloConfig.PgConf;
+import com.hellobike.base.tunnel.apollo.ApolloConfig.Rule;
+import com.hellobike.base.tunnel.config.ConfigLoader;
+import com.hellobike.base.tunnel.config.ConfigLoaderFactory;
+import com.hellobike.base.tunnel.config.EsConfig;
+import com.hellobike.base.tunnel.config.HBaseConfig;
+import com.hellobike.base.tunnel.config.JdbcConfig;
+import com.hellobike.base.tunnel.config.KafkaConfig;
+import com.hellobike.base.tunnel.config.PgConfig;
+import com.hellobike.base.tunnel.config.SubscribeConfig;
+import com.hellobike.base.tunnel.config.TunnelConfig;
+import com.hellobike.base.tunnel.config.ZkConfig;
 import com.hellobike.base.tunnel.filter.TableNameFilter;
 import com.hellobike.base.tunnel.monitor.ExporterConfig;
 import com.hellobike.base.tunnel.monitor.TunnelExporter;
@@ -33,413 +62,430 @@ import com.hellobike.base.tunnel.publisher.hive.HiveConfig;
 import com.hellobike.base.tunnel.publisher.hive.HivePublisher;
 import com.hellobike.base.tunnel.publisher.hive.HiveRule;
 import com.hellobike.base.tunnel.publisher.kafka.KafkaPublisher;
+import com.hellobike.base.tunnel.publisher.pg.PgPublisher;
 import com.hellobike.base.tunnel.spi.api.CollectionUtils;
 import com.hellobike.base.tunnel.utils.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.LogManager;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.management.ManagementFactory;
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * @author machunxiao 2018-11-07
  */
 public class TunnelLauncher {
 
-    private static final Logger                         /**/ LOGGER         /**/ = LoggerFactory.getLogger(TunnelLauncher.class);
-    private static final String                         /**/ TUNNEL_KEY     /**/ = "tunnel_subscribe_config";
-    private static final String                         /**/ TUNNEL_ZK_KEY  /**/ = "tunnel_zookeeper_address";
-    private static final String                         /**/ CONFIG_PATH    /**/ = "conf/tunnel.properties";
-    private static final String                         /**/ APP_ID         /**/ = "AppTunnelService";
+	private static final Logger /**/ LOGGER /**/ = LoggerFactory.getLogger(TunnelLauncher.class);
+	private static final String /**/ TUNNEL_KEY /**/ = "tunnel_subscribe_config";
+	private static final String /**/ TUNNEL_ZK_KEY /**/ = "tunnel_zookeeper_address";
+	private static final String /**/ CONFIG_PATH /**/ = "conf/tunnel.properties";
+	private static final String /**/ APP_ID /**/ = "AppTunnelService";
 
-    private static final TunnelConfig                   /**/ TUNNEL_CONFIG  /**/ = new TunnelConfig();
+	private static final TunnelConfig /**/ TUNNEL_CONFIG /**/ = new TunnelConfig();
 
-    public static void main(String[] args) {
+	public static void main(String[] args) {
 
-        Map<String, String> cmdArgs = toMap(args);
-        initTunnelConfig(cmdArgs);
-        initTunnelMonitor(cmdArgs);
+		Map<String, String> cmdArgs = toMap(args);
+		initTunnelConfig(cmdArgs);
+		initTunnelMonitor(cmdArgs);
 
-        ConfigLoader config = ConfigLoaderFactory.getConfigLoader(TUNNEL_CONFIG);
+		ConfigLoader config = ConfigLoaderFactory.getConfigLoader(TUNNEL_CONFIG);
 
-        String configValue = config.getProperty(TUNNEL_KEY, "");
-        if ("".equals(configValue)) {
-            LOGGER.warn("config is null at first setup");
-            System.exit(0);
-        }
+		String configValue = config.getProperty(TUNNEL_KEY, "");
+		// {"pg_dump_path":"","subscribes":[{"slotName":"pgl_postgres_provider47bb075_subscrip4db1999","pgConnConf":{"host":"172.16.6.19","port":1949,"database":"postgres","user":"repuser","password":"123456"},"rules":[{"table":"address","fields":null,"pks":["sid"],"esid":["id"],"index":"sid","type":"logs"}],"esConf":{"addrs":"http://localhost:9200"}}]}
 
-        LOGGER.info("config value:{}", configValue);
-        String zkAddress = config.getProperty(TUNNEL_ZK_KEY, "");
-        if ("".equals(zkAddress)) {
-            LOGGER.warn("zk address is null");
-            System.exit(0);
-        }
-        ZkConfig zkConfig = new ZkConfig();
-        zkConfig.setAddress(zkAddress);
-        LOGGER.info("zk address:{}", zkAddress);
+		if ("".equals(configValue)) {
+			LOGGER.warn("config is null at first setup");
+			System.exit(0);
+		}
 
-        startSubscribe(zkConfig, configValue);
-        config.addChangeListener(((key, oldValue, newValue) -> {
-            if (!TUNNEL_KEY.equals(key)) {
-                return;
-            }
-            startSubscribe(zkConfig, newValue);
-        }));
+		LOGGER.info("config value:{}", configValue);
+		String zkAddress = config.getProperty(TUNNEL_ZK_KEY, ""); // localhost:2181
+		if ("".equals(zkAddress)) {
+			LOGGER.warn("zk address is null");
+			System.exit(0);
+		}
+		ZkConfig zkConfig = new ZkConfig();
+		zkConfig.setAddress(zkAddress);
+		LOGGER.info("zk address:{}", zkAddress);
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            TunnelContext.close();
-            LogManager.shutdown();
-            LOGGER.info("TunnelServer Stopped");
-        }));
+		startSubscribe(zkConfig, configValue);
+		config.addChangeListener(((key, oldValue, newValue) -> {
+			if (!TUNNEL_KEY.equals(key)) {
+				return;
+			}
+			startSubscribe(zkConfig, newValue);
+		}));
 
-        LOGGER.info("TunnelServer Started at:{}", TUNNEL_CONFIG.getProcessId());
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			TunnelContext.close();
+			LogManager.shutdown();
+			LOGGER.info("TunnelServer Stopped");
+		}));
 
-    }
+		LOGGER.info("TunnelServer Started at:{}", TUNNEL_CONFIG.getProcessId());
 
-    public static TunnelConfig getTunnelConfig() {
-        return TUNNEL_CONFIG;
-    }
+	}
 
-    /**
-     * 初始化Tunnel 配置
-     * <pre>
-     *     -d domain
-     *     -a app id
-     *     -u use apollo
-     *     -c config file
-     *     -y use yukon
-     * </pre>
-     *
-     * @param cfg 参数
-     */
-    private static void initTunnelConfig(Map<String, String> cfg) {
-        TUNNEL_CONFIG.setProcessId(getPid());
-        TUNNEL_CONFIG.setAppId(cfg.getOrDefault("-a", APP_ID));
-        TUNNEL_CONFIG.setMetaDomain(cfg.getOrDefault("-d", getMetaDomain()));
-        TUNNEL_CONFIG.setUseApollo("true".equalsIgnoreCase(cfg.getOrDefault("-u", "true")));
-        TUNNEL_CONFIG.setUseYukon("true".equalsIgnoreCase(cfg.getOrDefault("-y", "false")));
-        TUNNEL_CONFIG.setConfigFile(cfg.get("-c"));
-    }
+	public static TunnelConfig getTunnelConfig() {
+		return TUNNEL_CONFIG;
+	}
 
-    /**
-     * <pre>
-     *     -p port
-     *     -m metric name
-     *     -n logger name
-     *     -l labels
-     * </pre>
-     *
-     * @param cfg 参数
-     */
-    private static void initTunnelMonitor(Map<String, String> cfg) {
-        ExporterConfig config = new ExporterConfig();
-        String port = cfg.get("-p");
-        String metricName = cfg.get("-m");
-        String loggerName = cfg.get("-n");
-        String labelNames = cfg.get("-l");
-        if (StringUtils.isNotBlank(port)) {
-            try {
-                config.setExportPort(Integer.parseInt(port));
-            } catch (Exception e) {
+	/**
+	 * 初始化Tunnel 配置
+	 * <pre>
+	 *     -d domain
+	 *     -a app id
+	 *     -u use apollo
+	 *     -c config file
+	 *     -y use yukon
+	 * </pre>
+	 *
+	 * @param cfg 参数
+	 */
+	private static void initTunnelConfig(Map<String, String> cfg) {
+		TUNNEL_CONFIG.setProcessId(getPid());
+		TUNNEL_CONFIG.setAppId(cfg.getOrDefault("-a", APP_ID));
+		TUNNEL_CONFIG.setMetaDomain(cfg.getOrDefault("-d", getMetaDomain()));
+		TUNNEL_CONFIG.setUseApollo("true".equalsIgnoreCase(cfg.getOrDefault("-u", "true")));
+		TUNNEL_CONFIG.setUseYukon("true".equalsIgnoreCase(cfg.getOrDefault("-y", "false")));
+		TUNNEL_CONFIG.setConfigFile(cfg.get("-c"));
+	}
 
-            }
-        }
-        if (StringUtils.isNotBlank(metricName)) {
-            config.setMetricName(metricName);
-        }
-        if (StringUtils.isNotBlank(loggerName)) {
-            config.setLoggerName(loggerName);
-        }
-        if (StringUtils.isNotBlank(labelNames)) {
-            config.setLabelNames(labelNames.split(","));
-        }
-        boolean useYukon = "true".equalsIgnoreCase(cfg.getOrDefault("-y", "true"));
-        TunnelExporter exporter = TunnelMonitorFactory.initializeExporter(useYukon, config);
+	/**
+	 * <pre>
+	 *     -p port
+	 *     -m metric name
+	 *     -n logger name
+	 *     -l labels
+	 * </pre>
+	 *
+	 * @param cfg 参数
+	 */
+	private static void initTunnelMonitor(Map<String, String> cfg) {
+		ExporterConfig config = new ExporterConfig();
+		String port = cfg.get("-p");
+		String metricName = cfg.get("-m");
+		String loggerName = cfg.get("-n");
+		String labelNames = cfg.get("-l");
+		if (StringUtils.isNotBlank(port)) {
+			try {
+				config.setExportPort(Integer.parseInt(port));
+			} catch (Exception e) {
 
-        exporter.startup();
-        Runtime.getRuntime().addShutdownHook(new Thread(exporter::destroy));
+			}
+		}
+		if (StringUtils.isNotBlank(metricName)) {
+			config.setMetricName(metricName);
+		}
+		if (StringUtils.isNotBlank(loggerName)) {
+			config.setLoggerName(loggerName);
+		}
+		if (StringUtils.isNotBlank(labelNames)) {
+			config.setLabelNames(labelNames.split(","));
+		}
+		boolean useYukon = "true".equalsIgnoreCase(cfg.getOrDefault("-y", "true"));
+		TunnelExporter exporter = TunnelMonitorFactory.initializeExporter(useYukon, config);
 
-    }
+		exporter.startup();
+		Runtime.getRuntime().addShutdownHook(new Thread(exporter::destroy));
 
-    private static Map<String, String> toMap(String[] args) {
-        Map<String, String> cfg = new LinkedHashMap<>();
-        if (args == null || args.length == 0) {
-            return cfg;
-        }
-        for (int i = 0; i < args.length; i += 2) {
-            try {
-                cfg.put(args[i], args[i + 1]);
-            } catch (Exception e) {
-                //
-            }
-        }
-        return cfg;
-    }
+	}
 
-    private static int getPid() {
-        String name = ManagementFactory.getRuntimeMXBean().getName();
-        return Integer.parseInt(name.split("@")[0]);
-    }
+	private static Map<String, String> toMap(String[] args) {
+		Map<String, String> cfg = new LinkedHashMap<>();
+		if (args == null || args.length == 0) {
+			return cfg;
+		}
+		for (int i = 0; i < args.length; i += 2) {
+			try {
+				cfg.put(args[i], args[i + 1]);
+			} catch (Exception e) {
+				//
+			}
+		}
+		return cfg;
+	}
 
-    private static void startSubscribe(ZkConfig zkConfig, String value) {
-        if (StringUtils.isBlank(value)) {
-            return;
-        }
-        ApolloConfig apolloConfig = JSON.parseObject(value, ApolloConfig.class);
+	private static int getPid() {
+		String name = ManagementFactory.getRuntimeMXBean().getName();
+		return Integer.parseInt(name.split("@")[0]);
+	}
 
-        List<ApolloConfig.Subscribe> subscribes = apolloConfig.getSubscribes();
-        for (ApolloConfig.Subscribe subscribe : subscribes) {
-            TunnelServer newServer = null;
-            TunnelServer oldServer = null;
-            try {
-                SubscribeConfig subscribeConfig = toTunnelConfig(subscribe);
-                subscribeConfig.setZkConfig(zkConfig);
-                newServer = new TunnelServer(subscribeConfig);
-                oldServer = TunnelContext.findServer(newServer.getServerId());
-                if (oldServer != null) {
-                    oldServer.shutdown();
-                }
-                TunnelContext.putServer(newServer);
-                newServer.start();
-            } catch (Exception e) {
-                LOGGER.warn("setup :'" + subscribe.getSlotName() + "' failure", e);
-                //
-                if (oldServer != null) {
-                    oldServer.shutdown();
-                    TunnelContext.remove(oldServer.getServerId());
-                }
-                if (newServer != null) {
-                    newServer.shutdown();
-                    TunnelContext.remove(newServer.getServerId());
-                }
-            }
-        }
-    }
+	private static void startSubscribe(ZkConfig zkConfig, String value) {
+		if (StringUtils.isBlank(value)) {
+			return;
+		}
+		ApolloConfig apolloConfig = JSON.parseObject(value, ApolloConfig.class);
+		// ApolloConfig(pgDumpPath=, subscribes=[ApolloConfig.Subscribe(slotName=pgl_postgres_provider47bb075_subscrip4db1999, pgConnConf=ApolloConfig.PgConnConf(host=172.16.6.19, port=1949, database=postgres, schema=null, user=repuser, password=123456), rules=[ApolloConfig.Rule(table=address, topic=null, partition=0, pks=[sid], esid=[id], index=sid, type=logs, fields=null, sql=null, parameters=null, family=null, qualifier=null, rowKeys=null, hbaseTable=null, hbaseKey=null, hiveTable=null, hiveFields=null)], kafkaConf=null, esConf=ApolloConfig.EsConf(addrs=http://localhost:9200), hbaseConf=null, hiveConf=null, hdfsConf=null)])
 
-    private static SubscribeConfig toTunnelConfig(ApolloConfig.Subscribe subscribe) {
+		List<ApolloConfig.Subscribe> subscribes = apolloConfig.getSubscribes();
+//		[ApolloConfig.Subscribe(slotName=pgl_postgres_provider47bb075_subscrip4db1999, pgConnConf=ApolloConfig.PgConnConf(host=172.16.6.19, port=1949, database=postgres, schema=null, user=repuser, password=123456), rules=[ApolloConfig.Rule(table=address, topic=null, partition=0, pks=[sid], esid=[id], index=sid, type=logs, fields=null, sql=null, parameters=null, family=null, qualifier=null, rowKeys=null, hbaseTable=null, hbaseKey=null, hiveTable=null, hiveFields=null)], kafkaConf=null, esConf=ApolloConfig.EsConf(addrs=http://localhost:9200), hbaseConf=null, hiveConf=null, hdfsConf=null)]
+		for (ApolloConfig.Subscribe subscribe : subscribes) {
+			TunnelServer newServer = null;
+			TunnelServer oldServer = null;
+			try {
+				SubscribeConfig subscribeConfig = toTunnelConfig(subscribe);
+				// SubscribeConfig(serverId=pgl_postgres_provider47bb075_subscrip4db1999@172.16.6.19:1949, jdbcConfig=JdbcConfig(url=jdbc:postgresql://172.16.6.19:1949/postgres, username=repuser, password=123456, slotName=pgl_postgres_provider47bb075_subscrip4db1999, lastLsn=, minVersion=9.4, rplLevel=database, host=172.16.6.19, port=1949, schema=postgres), zkConfig=null)
+				subscribeConfig.setZkConfig(zkConfig);
+				newServer = new TunnelServer(subscribeConfig);
+				oldServer = TunnelContext.findServer(newServer.getServerId());
+				if (oldServer != null) {
+					oldServer.shutdown();
+				}
+				TunnelContext.putServer(newServer);
+				newServer.start();
+			} catch (Exception e) {
+				LOGGER.warn("setup :'" + subscribe.getSlotName() + "' failure", e);
+				//
+				if (oldServer != null) {
+					oldServer.shutdown();
+					TunnelContext.remove(oldServer.getServerId());
+				}
+				if (newServer != null) {
+					newServer.shutdown();
+					TunnelContext.remove(newServer.getServerId());
+				}
+			}
+		}
+	}
 
-        String slotName = subscribe.getSlotName();
-        ApolloConfig.EsConf esConf = subscribe.getEsConf();
-        ApolloConfig.KafkaConf kafkaConf = subscribe.getKafkaConf();
-        ApolloConfig.HBaseConf hbaseConf = subscribe.getHbaseConf();
-        ApolloConfig.HiveConf hiveConf = subscribe.getHiveConf();
-        ApolloConfig.HdfsConf hdfsConf = subscribe.getHdfsConf();
+	private static SubscribeConfig toTunnelConfig(ApolloConfig.Subscribe subscribe) {
 
-        ApolloConfig.PgConnConf pgConnConf = subscribe.getPgConnConf();
-        List<ApolloConfig.Rule> rules = subscribe.getRules();
+		String slotName = subscribe.getSlotName();
+		ApolloConfig.EsConf esConf = subscribe.getEsConf();
+		ApolloConfig.KafkaConf kafkaConf = subscribe.getKafkaConf();
+		ApolloConfig.HBaseConf hbaseConf = subscribe.getHbaseConf();
+		ApolloConfig.HiveConf hiveConf = subscribe.getHiveConf();
+		ApolloConfig.HdfsConf hdfsConf = subscribe.getHdfsConf();
+		ApolloConfig.PgConf pgConf = subscribe.getPgConf();
 
-        parseEsConfig(slotName, esConf, rules);
-        parseKafkaConfig(slotName, kafkaConf, rules);
-        parseHBaseConfig(slotName, hbaseConf, rules);
-        parseHiveConfig(slotName, hiveConf, rules);
-        parseHdfsConfig(slotName, hdfsConf, rules);
+		ApolloConfig.PgConnConf pgConnConf = subscribe.getPgConnConf();
+		List<ApolloConfig.Rule> rules = subscribe.getRules();
 
-        JdbcConfig jdbcConfig = getJdbcConfig(slotName, pgConnConf);
-        SubscribeConfig subscribeConfig = new SubscribeConfig();
-        subscribeConfig.setJdbcConfig(jdbcConfig);
-        subscribeConfig.setServerId(generateServerId(pgConnConf.getHost(), pgConnConf.getPort(), jdbcConfig.getSlotName()));
-        return subscribeConfig;
-    }
+		parseEsConfig(slotName, esConf, rules);
+		parseKafkaConfig(slotName, kafkaConf, rules);
+		parseHBaseConfig(slotName, hbaseConf, rules);
+		parseHiveConfig(slotName, hiveConf, rules);
+		parseHdfsConfig(slotName, hdfsConf, rules);
+		parsePgConfig(slotName, pgConf, rules);
 
-    /**
-     * generate CONFIG_NAME new serverId
-     *
-     * @param host host
-     * @param port port
-     * @param slot slot
-     * @return serverId
-     */
-    private static String generateServerId(String host, int port, String slot) {
-        return slot + "@" + host + ":" + port;
-    }
+		JdbcConfig jdbcConfig = getJdbcConfig(slotName, pgConnConf);
+		SubscribeConfig subscribeConfig = new SubscribeConfig();
+		subscribeConfig.setJdbcConfig(jdbcConfig);
+		subscribeConfig
+				.setServerId(generateServerId(pgConnConf.getHost(), pgConnConf.getPort(), jdbcConfig.getSlotName()));
+		return subscribeConfig;
+	}
 
-    private static void parseKafkaConfig(String slotName, ApolloConfig.KafkaConf kafkaConf, List<ApolloConfig.Rule> rules) {
-        if (kafkaConf == null || CollectionUtils.isEmpty(kafkaConf.getAddrs())) {
-            return;
-        }
+	/**
+	 * generate CONFIG_NAME new serverId
+	 *
+	 * @param host host
+	 * @param port port
+	 * @param slot slot
+	 * @return serverId
+	 */
+	private static String generateServerId(String host, int port, String slot) {
+		return slot + "@" + host + ":" + port;
+	}
 
-        List<KafkaConfig> kafkaConfigs = rules.stream()
-                .map(TunnelLauncher::toKafkaConfig)
-                .filter(Objects::nonNull)
-                .peek(cfg -> cfg.setServer(StringUtils.join(kafkaConf.getAddrs(), ",")))
-                .collect(Collectors.toList());
+	private static void parsePgConfig(String slotName, PgConf pgConf, List<Rule> rules) {
+		if (pgConf == null || StringUtils.isAnyBlank(pgConf.getUrl(), pgConf.getUsername(), pgConf.getPassword())) {
+			LOGGER.error("Pgconf has any blank param:{}", pgConf);
+			return;
+		}
+		List<PgConfig> pgConfigs = rules.stream().map(TunnelLauncher::toPgConfig).filter(Objects::nonNull)
+				.peek(pgConfig -> {
+					pgConfig.setUrl(pgConf.getUrl());
+					pgConfig.setPassword(pgConf.getPassword());
+					pgConfig.setUsername(pgConf.getPassword());
+				}).collect(Collectors.toList());
 
-        PublisherManager.getInstance().putPublisher(slotName, new KafkaPublisher(kafkaConfigs));
-    }
+		PublisherManager.getInstance().putPublisher(slotName, new PgPublisher(pgConfigs));
+	}
 
-    private static void parseEsConfig(String slotName, ApolloConfig.EsConf esConf, List<ApolloConfig.Rule> rules) {
-        if (esConf == null || esConf.getAddrs() == null || esConf.getAddrs().isEmpty()) {
-            return;
-        }
-        List<EsConfig> esConfigs = rules.stream()
-                .map(TunnelLauncher::toEsConfig)
-                .filter(Objects::nonNull)
-                .peek(esConfig -> esConfig.setServer(esConf.getAddrs()))
-                .collect(Collectors.toList());
+	private static void parseKafkaConfig(String slotName, ApolloConfig.KafkaConf kafkaConf,
+			List<ApolloConfig.Rule> rules) {
+		if (kafkaConf == null || CollectionUtils.isEmpty(kafkaConf.getAddrs())) {
+			return;
+		}
 
-        PublisherManager.getInstance().putPublisher(slotName, new EsPublisher(esConfigs));
+		List<KafkaConfig> kafkaConfigs = rules.stream().map(TunnelLauncher::toKafkaConfig).filter(Objects::nonNull)
+				.peek(cfg -> cfg.setServer(StringUtils.join(kafkaConf.getAddrs(), ","))).collect(Collectors.toList());
 
-    }
+		PublisherManager.getInstance().putPublisher(slotName, new KafkaPublisher(kafkaConfigs));
+	}
 
-    private static void parseHBaseConfig(String slotName, ApolloConfig.HBaseConf hbaseConf, List<ApolloConfig.Rule> rules) {
+	private static void parseEsConfig(String slotName, ApolloConfig.EsConf esConf, List<ApolloConfig.Rule> rules) {
+		if (esConf == null || esConf.getAddrs() == null || esConf.getAddrs().isEmpty()) {
+			return;
+		}
+		List<EsConfig> esConfigs = rules.stream().map(TunnelLauncher::toEsConfig).filter(Objects::nonNull)
+				.peek(esConfig -> esConfig.setServer(esConf.getAddrs())).collect(Collectors.toList());
 
-        if (hbaseConf == null || StringUtils.isBlank(hbaseConf.getZkquorum())) {
-            return;
-        }
+		PublisherManager.getInstance().putPublisher(slotName, new EsPublisher(esConfigs));
 
-        List<HBaseConfig> configs = rules.stream()
-                .map(TunnelLauncher::toHBaseConfig)
-                .filter(Objects::nonNull)
-                .peek(config -> config.setQuorum(hbaseConf.getZkquorum()))
-                .collect(Collectors.toList());
-        PublisherManager.getInstance().putPublisher(slotName, new HBasePublisher(configs));
-    }
+	}
 
-    private static void parseHiveConfig(String slotName, ApolloConfig.HiveConf hiveConf, List<ApolloConfig.Rule> rules) {
-        if (hiveConf == null || StringUtils.isBlank(hiveConf.getHdfsAddress())) {
-            return;
-        }
-        List<HiveRule> hiveRules = rules.stream()
-                .map(TunnelLauncher::toHiveRule)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+	private static void parseHBaseConfig(String slotName, ApolloConfig.HBaseConf hbaseConf,
+			List<ApolloConfig.Rule> rules) {
 
-        HiveConfig hiveConfig = new HiveConfig();
-        hiveConfig.setUsername(StringUtils.isBlank(hiveConf.getUser()) ? "default" : hiveConf.getUser());
-        hiveConfig.setPassword(StringUtils.isBlank(hiveConf.getPassword()) ? "default" : hiveConf.getPassword());
-        hiveConfig.setHiveUrl("jdbc:hive2://" + hiveConf.getHost() + ":" + hiveConf.getPort() + "/default;ssl=false;");
-        hiveConfig.setRules(hiveRules);
-        hiveConfig.setDataDir(hiveConf.getDataDir());
-        hiveConfig.setTable(hiveConf.getTableName());
-        hiveConfig.setPartition(hiveConf.getPartition());
-        hiveConfig.setHdfsAddresses(hiveConf.getHdfsAddress().split(","));
+		if (hbaseConf == null || StringUtils.isBlank(hbaseConf.getZkquorum())) {
+			return;
+		}
 
+		List<HBaseConfig> configs = rules.stream().map(TunnelLauncher::toHBaseConfig).filter(Objects::nonNull)
+				.peek(config -> config.setQuorum(hbaseConf.getZkquorum())).collect(Collectors.toList());
+		PublisherManager.getInstance().putPublisher(slotName, new HBasePublisher(configs));
+	}
 
-        PublisherManager.getInstance().putPublisher(slotName, new HivePublisher(hiveConfig));
+	private static void parseHiveConfig(String slotName, ApolloConfig.HiveConf hiveConf,
+			List<ApolloConfig.Rule> rules) {
+		if (hiveConf == null || StringUtils.isBlank(hiveConf.getHdfsAddress())) {
+			return;
+		}
+		List<HiveRule> hiveRules = rules.stream().map(TunnelLauncher::toHiveRule).filter(Objects::nonNull)
+				.collect(Collectors.toList());
 
-    }
+		HiveConfig hiveConfig = new HiveConfig();
+		hiveConfig.setUsername(StringUtils.isBlank(hiveConf.getUser()) ? "default" : hiveConf.getUser());
+		hiveConfig.setPassword(StringUtils.isBlank(hiveConf.getPassword()) ? "default" : hiveConf.getPassword());
+		hiveConfig.setHiveUrl("jdbc:hive2://" + hiveConf.getHost() + ":" + hiveConf.getPort() + "/default;ssl=false;");
+		hiveConfig.setRules(hiveRules);
+		hiveConfig.setDataDir(hiveConf.getDataDir());
+		hiveConfig.setTable(hiveConf.getTableName());
+		hiveConfig.setPartition(hiveConf.getPartition());
+		hiveConfig.setHdfsAddresses(hiveConf.getHdfsAddress().split(","));
 
-    private static void parseHdfsConfig(String slotName, ApolloConfig.HdfsConf hdfsConf, List<ApolloConfig.Rule> rules) {
-        if (hdfsConf == null
-                || StringUtils.isBlank(hdfsConf.getAddress())
-                || StringUtils.isBlank(hdfsConf.getFile())
-                || CollectionUtils.isEmpty(rules)) {
-            return;
-        }
-        HdfsConfig hdfsConfig = new HdfsConfig();
-        hdfsConfig.setAddress(hdfsConf.getAddress());
-        hdfsConfig.setFileName(hdfsConf.getFile());
-        List<HdfsRule> hdfsRules = rules.stream()
-                .map(TunnelLauncher::toHdfsRule)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-        hdfsConfig.setRules(hdfsRules);
-        PublisherManager.getInstance().putPublisher(slotName, new HdfsPublisher(hdfsConfig));
-    }
+		PublisherManager.getInstance().putPublisher(slotName, new HivePublisher(hiveConfig));
 
-    private static HiveRule toHiveRule(ApolloConfig.Rule rule) {
-        if (rule.getTable() == null
-                || CollectionUtils.isEmpty(rule.getHiveFields())
-                || CollectionUtils.isEmpty(rule.getPks())) {
-            return null;
-        }
-        HiveRule hiveRule = new HiveRule();
-        hiveRule.setTable(rule.getTable());
-        hiveRule.setHiveTable(rule.getHiveTable());
-        hiveRule.setFields(rule.getHiveFields());
-        hiveRule.setPks(rule.getPks());
-        return hiveRule;
-    }
+	}
 
-    private static HdfsRule toHdfsRule(ApolloConfig.Rule rule) {
-        if (StringUtils.isBlank(rule.getTable())) {
-            return null;
-        }
-        HdfsRule hdfsRule = new HdfsRule();
-        hdfsRule.setTable(rule.getTable());
-        return hdfsRule;
-    }
+	private static void parseHdfsConfig(String slotName, ApolloConfig.HdfsConf hdfsConf,
+			List<ApolloConfig.Rule> rules) {
+		if (hdfsConf == null || StringUtils.isBlank(hdfsConf.getAddress()) || StringUtils.isBlank(hdfsConf.getFile())
+				|| CollectionUtils.isEmpty(rules)) {
+			return;
+		}
+		HdfsConfig hdfsConfig = new HdfsConfig();
+		hdfsConfig.setAddress(hdfsConf.getAddress());
+		hdfsConfig.setFileName(hdfsConf.getFile());
+		List<HdfsRule> hdfsRules = rules.stream().map(TunnelLauncher::toHdfsRule).filter(Objects::nonNull)
+				.collect(Collectors.toList());
+		hdfsConfig.setRules(hdfsRules);
+		PublisherManager.getInstance().putPublisher(slotName, new HdfsPublisher(hdfsConfig));
+	}
 
-    private static KafkaConfig toKafkaConfig(ApolloConfig.Rule rule) {
-        if (StringUtils.isBlank(rule.getTopic())) {
-            return null;
-        }
-        KafkaConfig kafkaConfig = new KafkaConfig();
-        kafkaConfig.setTopic(rule.getTopic());
-        kafkaConfig.setPartition(rule.getPartition());
-        kafkaConfig.setFilters(Collections.singletonList(new TableNameFilter(rule.getTable())));
-        kafkaConfig.setPkNames(new ArrayList<>(rule.getPks()));
+	private static HiveRule toHiveRule(ApolloConfig.Rule rule) {
+		if (rule.getTable() == null || CollectionUtils.isEmpty(rule.getHiveFields())
+				|| CollectionUtils.isEmpty(rule.getPks())) {
+			return null;
+		}
+		HiveRule hiveRule = new HiveRule();
+		hiveRule.setTable(rule.getTable());
+		hiveRule.setHiveTable(rule.getHiveTable());
+		hiveRule.setFields(rule.getHiveFields());
+		hiveRule.setPks(rule.getPks());
+		return hiveRule;
+	}
 
-        return kafkaConfig;
-    }
+	private static HdfsRule toHdfsRule(ApolloConfig.Rule rule) {
+		if (StringUtils.isBlank(rule.getTable())) {
+			return null;
+		}
+		HdfsRule hdfsRule = new HdfsRule();
+		hdfsRule.setTable(rule.getTable());
+		return hdfsRule;
+	}
 
-    private static EsConfig toEsConfig(ApolloConfig.Rule rule) {
-        if (StringUtils.isBlank(rule.getTable())
-                || StringUtils.isBlank(rule.getIndex())
-                || StringUtils.isBlank(rule.getType())
-                || rule.getPks() == null
-                || rule.getEsid() == null
-        ) {
-            return null;
-        }
-        EsConfig esConfig = new EsConfig();
-        esConfig.setTable(rule.getTable());
-        esConfig.setIndex(rule.getIndex());
-        esConfig.setType(rule.getType());
-        esConfig.setPkFieldNames(new ArrayList<>(rule.getPks()));
-        esConfig.setEsIdFieldNames(new ArrayList<>(rule.getEsid()));
-        esConfig.setFieldMappings(rule.getFields() == null ? new HashMap<>() : new HashMap<>(rule.getFields()));
-        esConfig.setFilters(Collections.singletonList(new TableNameFilter(esConfig.getTable())));
+	private static KafkaConfig toKafkaConfig(ApolloConfig.Rule rule) {
+		if (StringUtils.isBlank(rule.getTopic())) {
+			return null;
+		}
+		KafkaConfig kafkaConfig = new KafkaConfig();
+		kafkaConfig.setTopic(rule.getTopic());
+		kafkaConfig.setPartition(rule.getPartition());
+		kafkaConfig.setFilters(Collections.singletonList(new TableNameFilter(rule.getTable())));
+		kafkaConfig.setPkNames(new ArrayList<>(rule.getPks()));
 
-        esConfig.setSql(rule.getSql());
-        esConfig.setParameters(rule.getParameters());
+		return kafkaConfig;
+	}
 
-        return esConfig;
-    }
+	private static PgConfig toPgConfig(ApolloConfig.Rule rule) {
+		if (StringUtils.isBlank(rule.getTable()) || StringUtils.isBlank(rule.getIndex())
+				|| StringUtils.isBlank(rule.getType()) || rule.getPks() == null || rule.getEsid() == null) {
+			return null;
+		}
+		PgConfig pgConfig = new PgConfig();
+		pgConfig.setTable(rule.getTable());
+//		esConfig.setIndex(rule.getIndex());
+//		esConfig.setType(rule.getType());
+//		esConfig.setPkFieldNames(new ArrayList<>(rule.getPks()));
+//		esConfig.setEsIdFieldNames(new ArrayList<>(rule.getEsid()));
+//		esConfig.setFieldMappings(rule.getFields() == null ? new HashMap<>() : new HashMap<>(rule.getFields()));
+		pgConfig.setFilters(Collections.singletonList(new TableNameFilter(pgConfig.getTable())));
 
-    private static HBaseConfig toHBaseConfig(ApolloConfig.Rule rule) {
-        HBaseConfig config = new HBaseConfig();
-        config.setPks(rule.getPks());
-        config.setHbaseKey(rule.getHbaseKey());
-        config.setHbaseTable(rule.getHbaseTable());
-        config.setTable(rule.getTable());
-        config.setFamily(StringUtils.isBlank(rule.getFamily()) ? "data" : rule.getFamily());
-        config.setQualifier(StringUtils.isBlank(rule.getQualifier()) ? "bytes" : rule.getQualifier());
-        config.setFilters(Collections.singletonList(new TableNameFilter(rule.getTable())));
-        return config;
-    }
+//		esConfig.setSql(rule.getSql());
+//		esConfig.setParameters(rule.getParameters());
 
-    private static JdbcConfig getJdbcConfig(String slotName, ApolloConfig.PgConnConf pgConnConf) {
-        String jdbcUrl = "jdbc:postgresql://" + pgConnConf.getHost() + ":" + pgConnConf.getPort() + "/" + pgConnConf.getDatabase();
-        JdbcConfig jdbcConfig = new JdbcConfig();
-        jdbcConfig.setSlotName(slotName);
-        jdbcConfig.setUrl(jdbcUrl);
-        jdbcConfig.setUsername(pgConnConf.getUser());
-        jdbcConfig.setPassword(pgConnConf.getPassword());
-        jdbcConfig.setHost(pgConnConf.getHost());
-        jdbcConfig.setPort(pgConnConf.getPort());
-        jdbcConfig.setSchema(pgConnConf.getDatabase());
-        return jdbcConfig;
-    }
+		return pgConfig;
+	}
 
-    private static String getMetaDomain() {
-        InputStream is = FileUtils.load(CONFIG_PATH);
-        if (is == null) {
-            return "";
-        }
-        Properties prop = new Properties();
-        try {
-            prop.load(is);
-        } catch (IOException e) {
-            //
-        }
-        return prop.getProperty("tunnel.apollo.meta.domain", "");
-    }
+	private static EsConfig toEsConfig(ApolloConfig.Rule rule) {
+		if (StringUtils.isBlank(rule.getTable()) || StringUtils.isBlank(rule.getIndex())
+				|| StringUtils.isBlank(rule.getType()) || rule.getPks() == null || rule.getEsid() == null) {
+			return null;
+		}
+		EsConfig esConfig = new EsConfig();
+		esConfig.setTable(rule.getTable());
+		esConfig.setIndex(rule.getIndex());
+		esConfig.setType(rule.getType());
+		esConfig.setPkFieldNames(new ArrayList<>(rule.getPks()));
+		esConfig.setEsIdFieldNames(new ArrayList<>(rule.getEsid()));
+		esConfig.setFieldMappings(rule.getFields() == null ? new HashMap<>() : new HashMap<>(rule.getFields()));
+		esConfig.setFilters(Collections.singletonList(new TableNameFilter(esConfig.getTable())));
 
+		esConfig.setSql(rule.getSql());
+		esConfig.setParameters(rule.getParameters());
+
+		return esConfig;
+	}
+
+	private static HBaseConfig toHBaseConfig(ApolloConfig.Rule rule) {
+		HBaseConfig config = new HBaseConfig();
+		config.setPks(rule.getPks());
+		config.setHbaseKey(rule.getHbaseKey());
+		config.setHbaseTable(rule.getHbaseTable());
+		config.setTable(rule.getTable());
+		config.setFamily(StringUtils.isBlank(rule.getFamily()) ? "data" : rule.getFamily());
+		config.setQualifier(StringUtils.isBlank(rule.getQualifier()) ? "bytes" : rule.getQualifier());
+		config.setFilters(Collections.singletonList(new TableNameFilter(rule.getTable())));
+		return config;
+	}
+
+	private static JdbcConfig getJdbcConfig(String slotName, ApolloConfig.PgConnConf pgConnConf) {
+		String jdbcUrl = "jdbc:postgresql://" + pgConnConf.getHost() + ":" + pgConnConf.getPort() + "/"
+				+ pgConnConf.getDatabase();
+		JdbcConfig jdbcConfig = new JdbcConfig();
+		jdbcConfig.setSlotName(slotName);
+		jdbcConfig.setUrl(jdbcUrl);
+		jdbcConfig.setUsername(pgConnConf.getUser());
+		jdbcConfig.setPassword(pgConnConf.getPassword());
+		jdbcConfig.setHost(pgConnConf.getHost());
+		jdbcConfig.setPort(pgConnConf.getPort());
+		jdbcConfig.setSchema(pgConnConf.getDatabase());
+		return jdbcConfig;
+	}
+
+	private static String getMetaDomain() {
+		InputStream is = FileUtils.load(CONFIG_PATH);
+		if (is == null) {
+			return "";
+		}
+		Properties prop = new Properties();
+		try {
+			prop.load(is);
+		} catch (IOException e) {
+			//
+		}
+		return prop.getProperty("tunnel.apollo.meta.domain", "");
+	}
 
 }
