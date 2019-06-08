@@ -21,11 +21,12 @@ import lombok.ToString;
 /**
  * ClassName:PgConfig <br/>
  * Function: 目标库配置. <br/>
- * Date:     2019年6月6日 下午1:57:28 <br/>
- * @author   yibai
- * @version  
- * @since    JDK 1.6
- * @see 	 
+ * Date: 2019年6月6日 下午1:57:28 <br/>
+ * 
+ * @author yibai
+ * @version
+ * @since JDK 1.6
+ * @see
  */
 @Setter
 @Getter
@@ -35,5 +36,6 @@ public class PgConfig {
 	private String username;
 	private String password;
 	private String table;
+	private List<String> pks; // 表，主键
 	private List<IEventFilter> filters = new ArrayList<>();
 }

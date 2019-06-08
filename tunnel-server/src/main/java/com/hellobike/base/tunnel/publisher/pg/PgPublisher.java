@@ -2,7 +2,7 @@
  * Project Name:tunnel-server
  * File Name:PgPublisher.java
  * Package Name:com.hellobike.base.tunnel.publisher.pg
- * Date:2019年6月6日下午5:19:15
+ * Date:2019骞�6鏈�6鏃ヤ笅鍗�5:19:15
  * Copyright (c) 2019, www.windo-soft.com All Rights Reserved.
  *
 */
@@ -14,7 +14,6 @@ import static com.hellobike.base.tunnel.utils.TimeUtils.sleepOneSecond;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -23,16 +22,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import org.apache.commons.dbutils.QueryRunner;
-import org.apache.commons.dbutils.handlers.MapHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.druid.pool.DruidDataSource;
 import com.hellobike.base.tunnel.config.PgConfig;
+import com.hellobike.base.tunnel.model.ColumnData;
 import com.hellobike.base.tunnel.model.Event;
+import com.hellobike.base.tunnel.model.EventType;
 import com.hellobike.base.tunnel.model.InvokeContext;
 import com.hellobike.base.tunnel.publisher.BasePublisher;
 import com.hellobike.base.tunnel.publisher.IPublisher;
@@ -42,16 +41,18 @@ import com.hellobike.base.tunnel.utils.NamedThreadFactory;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 
 /**
  * ClassName:PgPublisher <br/>
  * Function: TODO ADD FUNCTION. <br/>
- * Reason:	 TODO ADD REASON. <br/>
- * Date:     2019年6月6日 下午5:19:15 <br/>
- * @author   yibai
- * @version  
- * @since    JDK 1.6
- * @see 	 
+ * Reason: TODO ADD REASON. <br/>
+ * Date: 2019骞�6鏈�6鏃� 涓嬪崍5:19:15 <br/>
+ * 
+ * @author yibai
+ * @version
+ * @since JDK 1.6
+ * @see
  */
 public class PgPublisher extends BasePublisher implements IPublisher {
 
@@ -69,12 +70,12 @@ public class PgPublisher extends BasePublisher implements IPublisher {
 		this.pgConfigs = pgConfigs;
 		int total = 8;
 		this.executor = new ThreadPoolExecutor(total, total, 60L, TimeUnit.SECONDS, new ArrayBlockingQueue<>(5000),
-				new NamedThreadFactory("PgSendThread"));
+		        new NamedThreadFactory("PgSendThread"));
 
-//		this.restClients = new RestHighLevelClient[total];
-//		for (int i = 0; i < total; i++) {
-//			this.restClients[i] = newRestEsHighLevelClient();
-//		}
+		// this.restClients = new RestHighLevelClient[total];
+		// for (int i = 0; i < total; i++) {
+		// this.restClients[i] = newRestEsHighLevelClient();
+		// }
 		this.dataSources = new ConcurrentHashMap<>();
 		this.requestHelperQueue = new LinkedBlockingQueue<>(81920);
 
@@ -92,15 +93,12 @@ public class PgPublisher extends BasePublisher implements IPublisher {
 
 	@Override
 	public void publish(InvokeContext context, Callback callback) {
-		Event event = context.getEvent();
-		System.out.println(pgConfigs);
-		System.out.println("222: " + context);
-		this.pgConfigs.forEach(pgConfigs -> internalPublish(context, callback, pgConfigs));
+		this.pgConfigs.forEach(pgConfig -> internalPublish(context, callback, pgConfig));
 	}
 
 	private void internalPublish(InvokeContext context, Callback callback, PgConfig pgConfig) {
 		if (CollectionUtils.isEmpty(pgConfig.getFilters())
-				|| pgConfig.getFilters().stream().allMatch(filter -> filter.filter(context.getEvent()))) {
+		        || pgConfig.getFilters().stream().allMatch(filter -> filter.filter(context.getEvent()))) {
 			sendToEs(pgConfig, context, callback);
 		}
 	}
@@ -125,20 +123,140 @@ public class PgPublisher extends BasePublisher implements IPublisher {
 			if (CollectionUtils.isEmpty(helpers)) {
 				return;
 			}
-			Map<Object, List<Helper>> data = helpers.stream()
-					.collect(Collectors.groupingBy(helper -> helper.pgConfig.getTable()));
-			System.out.println(data);
-			for (List<Helper> list : data.values()) {
-				if (list.isEmpty()) {
-					continue;
-				}
-//				syncSend(restClients[idx], toRequests(list));
-			}
+			toRequests(helpers);
 		} finally {
-//			if (!helpers.isEmpty()) {
-//				Map<String, Long> data = getMonitorData(helpers);
-//				mapToStatics(data).forEach(statics -> TunnelMonitorFactory.getTunnelMonitor().collect(statics));
-//			}
+			// if (!helpers.isEmpty()) {
+			// Map<String, Long> data = getMonitorData(helpers);
+			// mapToStatics(data).forEach(statics ->
+			// TunnelMonitorFactory.getTunnelMonitor().collect(statics));
+			// }
+		}
+	}
+
+	private void toRequests(List<Helper> helpers) {
+		for (Helper helper : helpers) {
+			// System.err.println(JSON.toJSONString(helper));
+			// Map<String, String> values =
+			// helper.context.getEvent().getDataList().stream()
+			// .collect(Collectors.toMap(ColumnData::getName,
+			// ColumnData::getValue));
+			// List<String> args = new ArrayList<>();
+			// for (String k : parameters) {
+			// args.add(getValue(values.get(k)));
+			// }
+			// System.out.println(values); // {data=12, id=29}
+			PgConfig pgConfig = helper.getPgConfig();
+			String sql = buildSQL(helper);
+			execute(sql, pgConfig);
+		}
+	}
+
+	public static void main(String[] args) {
+		// String text = "";
+		// Helper helper = JSON.parseObject(text, Helper.class);
+		// System.out.println(helper);
+		// Event event = helper.getContext().getEvent();
+		// System.out.println(event);
+		// for (ColumnData columnData : event.getDataList()) {
+		// System.out.println(columnData);
+		// }
+
+		StringBuilder buf = new StringBuilder();
+		buf.append("12323");
+		System.out.println(tryDeleteChar(buf, ','));
+
+		System.out.println(tryDeleteString(buf, "23"));
+
+	}
+
+	private String buildSQL(Helper helper) {
+		String sql = "";
+		Event event = helper.getContext().getEvent();
+		// System.out.println(event);
+		// for (ColumnData columnData : event.getDataList()) {
+		// System.out.println(columnData);
+		// }
+		PgConfig pgConfig = helper.getPgConfig();
+		EventType eventType = event.getEventType();
+		List<ColumnData> dataList = event.getDataList();
+		List<String> pks = pgConfig.getPks(); // 涓婚敭鏀緒here鏉′欢
+
+		switch (eventType) {
+		case INSERT:
+			StringBuilder columnBuf = new StringBuilder(100);
+			StringBuilder valuesBuf = new StringBuilder(100);
+			columnBuf.append("INSERT INTO ").append(pgConfig.getTable()).append("(");
+			valuesBuf.append("VALUES(");
+			for (ColumnData columnData : dataList) {
+				columnBuf.append(columnData.getName()).append(",");
+				valuesBuf.append(columnData.buildData()).append(",");
+			}
+			tryDeleteChar(columnBuf, ',');
+			tryDeleteChar(valuesBuf, ',');
+			columnBuf.append(") ");
+			valuesBuf.append(")");
+			sql = columnBuf.toString() + valuesBuf.toString();
+			break;
+		case UPDATE:
+			StringBuilder setBuf = new StringBuilder(100);
+			StringBuilder whereBuf = new StringBuilder(100);
+			setBuf.append("UPDATE ").append(pgConfig.getTable()).append(" SET ");
+			whereBuf.append(" WHERE ");
+			for (ColumnData columnData : dataList) {
+				String colname = columnData.getName();
+				if (pks.contains(colname)) {
+					whereBuf.append(colname).append("=").append(columnData.buildData()).append("AND ");
+				} else {
+					setBuf.append(colname).append("=").append(columnData.buildData()).append(",");
+				}
+			}
+			tryDeleteString(whereBuf, "AND ");
+			tryDeleteChar(setBuf, ',');
+			sql = setBuf.toString() + whereBuf.toString();
+			break;
+		case DELETE:
+			StringBuilder buf = new StringBuilder(100);
+			buf.append("DELETE FROM ").append(pgConfig.getTable()).append(" WHERE ");
+			for (ColumnData columnData : dataList) {
+				String colname = columnData.getName();
+				if (pks.contains(colname)) {
+					buf.append(colname).append("=").append(columnData.buildData()).append("AND ");
+				} else {
+				}
+			}
+			tryDeleteString(buf, "AND ");
+			sql = buf.toString();
+			break;
+		default:
+			throw new IllegalArgumentException(String.format("不支持的事件类型： %s", eventType));
+		}
+		System.err.println("执行SQL: " + sql);
+		LOG.debug("执行SQL: {}", sql);
+		return sql;
+	}
+
+	private static StringBuilder tryDeleteChar(StringBuilder buf, char delete) {
+		if (buf.charAt(buf.length() - 1) == delete) {
+			buf.deleteCharAt(buf.length() - 1);
+		}
+		return buf;
+	}
+
+	private static StringBuilder tryDeleteString(StringBuilder buf, String delete) {
+		if (buf.toString().endsWith(delete)) {
+			buf.delete(buf.length() - delete.length(), buf.length());
+		}
+		return buf;
+	}
+
+	private void execute(String sql, PgConfig pgConfig) {
+		try (Connection conn = getConnection(pgConfig)) {
+			QueryRunner qr = new QueryRunner();
+			int execute = qr.execute(conn, sql);
+			System.err.println("SQL执行结果： " + execute);
+		} catch (Exception e) {
+			//
+			LOG.error("SQL执行异常", e);
 		}
 	}
 
@@ -154,7 +272,7 @@ public class PgPublisher extends BasePublisher implements IPublisher {
 	public void close() {
 		this.started = false;
 		this.executor.shutdown();
-//		Arrays.stream(this.restClients).forEach(this::closeClosable);
+		// Arrays.stream(this.restClients).forEach(this::closeClosable);
 		this.dataSources.values().forEach(this::closeClosable);
 		this.dataSources.clear();
 		LOG.info("EsPublisher Closed");
@@ -170,58 +288,44 @@ public class PgPublisher extends BasePublisher implements IPublisher {
 		}
 	}
 
-	private Map<String, Object> executeQuery(String sql, InvokeContext context) {
-		Connection connection = null;
-		try {
-			connection = getConnection(context);
-			QueryRunner qr = new QueryRunner();
-			Map<String, Object> query = qr.query(connection, sql, new MapHandler());
-			if (query == null || query.isEmpty()) {
-				query = new LinkedHashMap<>();
-				LOG.warn("Select Nothing By SQL:{}", sql);
-			}
-			return query;
-		} catch (Exception e) {
-			//
-		} finally {
-			closeClosable(connection);
-		}
-		return new LinkedHashMap<>();
-	}
-
-	private Connection getConnection(InvokeContext ctx) throws SQLException {
-		DruidDataSource dataSource = dataSources.get(ctx.getSlotName());
+	private Connection getConnection(PgConfig pgConfig) throws SQLException {
+		DruidDataSource dataSource = dataSources.get(pgConfig.getUrl());
 		if (dataSource == null) {
 			DruidDataSource tmp;
 			synchronized (this) {
-				tmp = createDataSource(ctx);
+				tmp = createDataSource(pgConfig);
 			}
-			dataSources.put(ctx.getSlotName(), tmp);
-			dataSource = dataSources.get(ctx.getSlotName());
-			LOG.info("DataSource Initialized. Slot:{},DataSource:{}", ctx.getSlotName(), dataSource.getName());
+			dataSources.put(pgConfig.getUrl(), tmp);
+			dataSource = dataSources.get(pgConfig.getUrl());
+			LOG.info("DataSource Initialized. url:{},DataSource:{}", pgConfig.getUrl(), dataSource.getName());
 		}
 		return dataSource.getConnection();
 	}
 
-	private DruidDataSource createDataSource(InvokeContext ctx) {
+	private DruidDataSource createDataSource(PgConfig pgConfig) {
 		DruidDataSource dataSource = new DruidDataSource();
-		dataSource.setUsername(ctx.getJdbcUser());
-		dataSource.setUrl(ctx.getJdbcUrl());
-		dataSource.setPassword(ctx.getJdbcPass());
+		dataSource.setUsername(pgConfig.getUsername());
+		dataSource.setUrl(pgConfig.getUrl());
+		dataSource.setPassword(pgConfig.getPassword());
 		dataSource.setValidationQuery("select 1");
-		dataSource.setMinIdle(20);
-		dataSource.setMaxActive(50);
+		dataSource.setMinIdle(10);
+		dataSource.setMaxActive(30);
 		return dataSource;
 	}
 
 	@Setter
 	@Getter
+	@ToString
 	private static class Helper {
 
-		final PgConfig pgConfig;
-		final InvokeContext context;
+		private PgConfig pgConfig;
+		private InvokeContext context;
 
-		private Helper(PgConfig pgConfig, InvokeContext context) {
+		@SuppressWarnings("unused")
+		public Helper() {
+		}
+
+		public Helper(PgConfig pgConfig, InvokeContext context) {
 			this.pgConfig = pgConfig;
 			this.context = context;
 		}

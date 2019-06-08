@@ -3,6 +3,9 @@ package com.hellobike.base.tunnel.model;
 import java.io.Serializable;
 import java.util.Objects;
 
+import lombok.Getter;
+import lombok.Setter;
+
 /*
  * Copyright 2018 Shanghai Junzheng Network Technology Co.,Ltd.
  *
@@ -22,71 +25,53 @@ import java.util.Objects;
 /**
  * @author machunxiao 2018-10-25
  */
+@Getter
+@Setter
 public class ColumnData implements Serializable {
 
-    private static final long serialVersionUID = 4767055418095657107L;
-    private String name;
-    private String dataType;
-    private String value;
+	private static final long serialVersionUID = 4767055418095657107L;
+	private String name;
+	// private String dataType;
+	private DataType dataType;
+	private String value;
 
-    public ColumnData() {
-    }
+	public ColumnData() {
+	}
 
-    public ColumnData(String name, String dataType, String value) {
-        this.name = name;
-        this.dataType = dataType;
-        this.value = value;
-    }
+	public String buildData() {
+		return dataType.buildData(value);
+	}
 
-    public String getName() {
-        return name;
-    }
+	public ColumnData(String name, String dataType, String value) {
+		this.name = name;
+		this.dataType = DataType.typeValueOf(dataType);
+		this.value = value;
+	}
 
-    public void setName(String name) {
-        this.name = name;
-    }
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		ColumnData data = (ColumnData) o;
+		return Objects.equals(name, data.name) && Objects.equals(dataType, data.dataType)
+		        && Objects.equals(value, data.value);
+	}
 
-    public String getDataType() {
-        return dataType;
-    }
+	@Override
+	public int hashCode() {
+		return Objects.hash(name, dataType, value);
+	}
 
-    public void setDataType(String dataType) {
-        this.dataType = dataType;
-    }
+	@Override
+	public String toString() {
+		return "ColumnData{" + "name='" + name + '\'' + ", dataType='" + dataType + '\'' + ", value=" + value + '}';
+	}
 
-    public String getValue() {
-        return value;
-    }
-
-    public void setValue(String value) {
-        this.value = value;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        ColumnData data = (ColumnData) o;
-        return Objects.equals(name, data.name) &&
-                Objects.equals(dataType, data.dataType) &&
-                Objects.equals(value, data.value);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, dataType, value);
-    }
-
-    @Override
-    public String toString() {
-        return "ColumnData{" +
-                "name='" + name + '\'' +
-                ", dataType='" + dataType + '\'' +
-                ", value=" + value +
-                '}';
-    }
+	public void setDataType(String dataType) {
+		this.dataType = DataType.typeValueOf(dataType);
+	}
 }

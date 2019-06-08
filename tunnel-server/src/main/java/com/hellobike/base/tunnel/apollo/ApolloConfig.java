@@ -33,20 +33,20 @@ public class ApolloConfig {
 
 	@JSONField(name = "pg_dump_path")
 	private String pgDumpPath;
-	private List<Subscribe> subscribes;
+	private List<Subscribe> subscribes; // 一个数据库对应一个Subscribe
 
 	@Data
 	public static class Subscribe {
-
 		private String slotName;
-		private PgConnConf pgConnConf;
+		// private List<String> slotNames; // 单个数据库中可以存在多个slot同步到目标库
+		private PgConnConf pgConnConf; // 被同步库的数据库复制配置
 		private List<Rule> rules;
 		private KafkaConf kafkaConf;
 		private EsConf esConf;
 		private HBaseConf hbaseConf;
 		private HiveConf hiveConf;
 		private HdfsConf hdfsConf;
-		private PgConf pgConf;
+		private PgConf pgConf; // 同步到目标库的数据库配置
 
 	}
 
